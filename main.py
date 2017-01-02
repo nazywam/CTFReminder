@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from time import time
 from requests import get
 import tweepy
@@ -20,7 +22,6 @@ REMIND_CTF = """{} starts in under 24 hours!
 """
 
 def fetchCtfs(timeStart, timeEnd):
-
     dataParameters = {
         "limit":"1000",
         "start":str(timeStart),
@@ -69,9 +70,7 @@ def tweet(data):
      api.update_status(status=data)
 
 def tweetWithImage(data, imageUrl):
-
     filename = 'temp.png'
-
 
     request = get(imageUrl, stream=True)
     if request.status_code == 200:
