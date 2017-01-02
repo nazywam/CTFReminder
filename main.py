@@ -54,13 +54,13 @@ def initAPI():
     return tweepy.API(auth)
 
 def readFrom(file):
-    f = open(file, "rb")
+    f = open(os.path.realpath(__file__)+file, "rb")
     r = f.read()
     f.close()
     return eval(r)
 
 def writeTo(q, file):
-    f = open(file, "wb")
+    f = open(os.path.realpath(__file__)+file, "wb")
     f.write(str(q))
     f.close()
 
@@ -88,6 +88,7 @@ def tweetWithImage(data, imageUrl):
 
 
 def tweetNew(event):
+    print("Tweet new")
 
     start = event["start"].replace("T", " ")[:-6]+" UTC"
 
@@ -100,6 +101,7 @@ def tweetNew(event):
 
 
 def tweetRemind(event):
+    print("Tweet remind")
 
     payload = REMIND_CTF.format(event["title"], event["ctftime_url"])
 
@@ -143,6 +145,6 @@ for f in justFetched[::-1]:
 writeTo(first, "first")
 writeTo(second, "second")
 
-l = open("log", "a")
+l = open(os.path.realpath(__file__)+"log", "a")
 l.write(str(currentTime)+" "+str(updates))
 l.close()
