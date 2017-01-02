@@ -54,13 +54,13 @@ def initAPI():
     return tweepy.API(auth)
 
 def readFrom(file):
-    f = open(os.path.dirname(os.path.realpath(__file__))+file, "rb")
+    f = open(os.path.dirname(os.path.realpath(__file__))+"/"+file, "rb")
     r = f.read()
     f.close()
     return eval(r)
 
 def writeTo(q, file):
-    f = open(os.path.dirname(os.path.realpath(__file__))+file, "wb")
+    f = open(os.path.dirname(os.path.realpath(__file__))+"/"+file, "wb")
     f.write(str(q))
     f.close()
 
@@ -145,6 +145,6 @@ for f in justFetched[::-1]:
 writeTo(first, "first")
 writeTo(second, "second")
 
-l = open(os.path.dirname(os.path.realpath(__file__))+"log", "a")
+l = open(os.path.dirname(os.path.realpath(__file__))+"/log", "a")
 l.write(str(currentTime)+" "+str(updates))
 l.close()
