@@ -66,7 +66,7 @@ def writeTo(q, file):
 
 def tweet(data):
      api = initAPI()
-     api.update(status=data)
+     api.update_status(status=data)
 
 def tweetWithImage(data, imageUrl):
 
