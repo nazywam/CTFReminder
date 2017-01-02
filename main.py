@@ -118,6 +118,8 @@ second = readFrom("second")
 
 justFetched = fetchAll()
 
+updates = 0
+
 for f in justFetched[::-1]:
 
     startTime = parse(f["start"])
@@ -131,11 +133,16 @@ for f in justFetched[::-1]:
             if f not in second and f not in first:
                 tweetNew(f)
                 first.append(f)
+                updates += 1
 
             if f in first and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
                 tweetRemind(f)
                 second.append(f)
-
+                updates += 1
 
 writeTo(first, "first")
 writeTo(second, "second")
+
+l = open("log", "a")
+l.write(str(currentTime)+" "+str(updates))
+l.close()
