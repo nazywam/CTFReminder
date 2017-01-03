@@ -110,6 +110,12 @@ def tweetRemind(event):
     else:
         tweet(payload)
 
+def ctfInList(ctf, list):
+    for i in list:
+        if i["ctf_id"] == ctf["ctf_id"]:
+            return True
+    return False
+
 #get current time in unix epoch
 currentTime = int(time())
 
@@ -132,12 +138,12 @@ for f in justFetched[::-1]:
         #we don't really care for onsite events
         if not f["onsite"]:
             #brand new tweet
-            if f not in second and f not in first:
+            if not ctfInList(f, second) and not ctfInList(f, first):
                 tweetNew(f)
                 first.append(f)
                 updates += 1
 
-            if f in first and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
+            if ctfInList(f, first) and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
                 tweetRemind(f)
                 second.append(f)
                 updates += 1
