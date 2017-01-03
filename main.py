@@ -41,7 +41,7 @@ def fetchAll():
     return (fetchCtfs(currentTime, currentTime + 1000000000))
 
 def initAPI():
-    config = open("config", "r").read().split("\n")
+    config = open(os.path.dirname(os.path.realpath(__file__))+"/config", "r").read().split("\n")
 
     consumer_key = config[0]
     consumer_secret = config[1]
@@ -146,5 +146,5 @@ writeTo(first, "first")
 writeTo(second, "second")
 
 l = open(os.path.dirname(os.path.realpath(__file__))+"/log", "a")
-l.write(str(currentTime)+" "+str(updates))
+l.write(str(currentTime)+" "+str(updates)+"\n")
 l.close()
