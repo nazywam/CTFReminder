@@ -3,8 +3,9 @@
 from time import time
 from requests import get
 import tweepy
-from dateutil.parser import parse
+import dateutil.parser
 import os
+from bs4 import BeautifulSoup
 
 CTFTIME_API_URL = "https://ctftime.org/api/v1/events/"
 
@@ -12,12 +13,22 @@ CTFTIME_API_URL = "https://ctftime.org/api/v1/events/"
 UPDATE_TIME = 5 * 60 #5 minutes
 DAY_TIMESTAMP = 60 * 60 * 24 #24 hours
 
-NEW_CTF = """New CTF announced!
+
+NEW_CTF = """New CTF!
 {}, starts at {}
 {}
 """
 
+NEW_CTF_TWITTER = """New CTF!
+{} organized by @{}, starts at {}
+{}
+"""
+
 REMIND_CTF = """{} starts in under 24 hours!
+{}
+"""
+
+REMIND_CTF_TWITTER = """{} organized by @{} starts in under 24 hours!
 {}
 """
 
@@ -66,8 +77,8 @@ def writeTo(q, file):
 
 
 def tweet(data):
-     api = initAPI()
-     api.update_status(status=data)
+    api = initAPI()
+    api.update_status(status=data)
 
 def tweetWithImage(data, imageUrl):
     filename = 'temp.png'
@@ -87,12 +98,39 @@ def tweetWithImage(data, imageUrl):
         tweet(data)
 
 
+def getOrganizerTwitterHandle(organizer):
+    data = get("https://ctftime.org/team/" + str(organizer)).text
+
+    soup = BeautifulSoup(data, "lxml")
+
+    ret = ""
+
+    for i in soup.find_all("a"):
+
+        try:
+            if "https://twitter" in i["href"]:
+                ret = i["href"][20:]
+        except KeyError:
+            pass
+
+    return ret
+
+
 def tweetNew(event):
     print("Tweet new")
 
     start = event["start"].replace("T", " ")[:-6]+" UTC"
 
-    payload = NEW_CTF.format(event["title"], start, event["ctftime_url"])
+    orgTwitter = getOrganizerTwitterHandle(event["organizers"][0]["id"])
+
+    if orgTwitter != "":
+        payload = NEW_CTF_TWITTER.format(event["title"], orgTwitter, start, event["ctftime_url"])
+    else:
+        payload = NEW_CTF.format(event["title"], start, event["ctftime_url"])
+
+
+    if len(payload) > 140:
+        payload = NEW_CTF.format(event["ctftime_url"], start, "")
 
     if(event["logo"] != ""):
         tweetWithImage(payload, event["logo"])
@@ -103,7 +141,15 @@ def tweetNew(event):
 def tweetRemind(event):
     print("Tweet remind")
 
-    payload = REMIND_CTF.format(event["title"], event["ctftime_url"])
+    orgTwitter = getOrganizerTwitterHandle(event["organizers"][0]["id"])
+
+    if(orgTwitter != ""):
+        payload = REMIND_CTF_TWITTER.format(event["title"], orgTwitter, event["ctftime_url"])
+    else:
+        payload = REMIND_CTF.format(event["title"], event["ctftime_url"])
+
+    if len(payload) > 140:
+        payload = REMIND_CTF.format(event["ctftime_url"], ":)")
 
     if(event["logo"] != ""):
         tweetWithImage(payload, event["logo"])
@@ -130,7 +176,7 @@ updates = 0
 
 for f in justFetched[::-1]:
 
-    startTime = parse(f["start"])
+    startTime = dateutil.parser.parse(f["start"])
 
     startTimeEpoch = int(startTime.strftime("%s"))
     #no need to think about ctfs for time travelers...
