@@ -10,7 +10,7 @@ CTFTIME_API_URL = "https://ctftime.org/api/v1/events/"
 
 #interval at which this script is called
 UPDATE_TIME = 5 * 60 #5 minutes
-DAY_TIMESTAMP = 1 * 60 * 24 #24 hours
+DAY_TIMESTAMP = 60 * 60 * 24 #24 hours
 
 NEW_CTF = """New CTF announced!
 {}, starts at {}
@@ -143,7 +143,7 @@ for f in justFetched[::-1]:
                 first.append(f)
                 updates += 1
 
-            if ctfInList(f, first) and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
+            if ctfInList(f, first) and not ctfInList(f, second) and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
                 tweetRemind(f)
                 second.append(f)
                 updates += 1
