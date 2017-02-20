@@ -20,7 +20,7 @@ NEW_CTF = """New CTF!
 """
 
 NEW_CTF_TWITTER = """New CTF!
-{} organized by @{}, starts at {}
+{} organized by {}, starts at {}
 {}
 """
 
@@ -28,7 +28,7 @@ REMIND_CTF = """{} starts in under 24 hours!
 {}
 """
 
-REMIND_CTF_TWITTER = """{} organized by @{} starts in under 24 hours!
+REMIND_CTF_TWITTER = """{} organized by {} starts in under 24 hours!
 {}
 """
 
@@ -105,13 +105,19 @@ def getOrganizerTwitterHandle(organizer):
 
     ret = ""
 
-    for i in soup.find_all("a"):
+    for i in soup.find_all("div", {"class":"span10"}):
 
-        try:
-            if "https://twitter" in i["href"]:
-                ret = i["href"][20:]
-        except KeyError:
-            pass
+        for c in i.children:
+            for q in str(c).split("\n"):
+                if "Twitter:" in q:
+                    if "http" in q:
+                        s = BeautifulSoup(q, "lxml")
+                        url = s.find_all("a")[0].get("href")
+                        ret = "@" + url.split("/")[-1]
+                    elif "@" in q:
+                        ret = q[12:-4]
+                    else:
+                        ret = "@" + q[12:-4]
 
     return ret
 
@@ -127,7 +133,6 @@ def tweetNew(event):
         payload = NEW_CTF_TWITTER.format(event["title"], orgTwitter, start, event["ctftime_url"])
     else:
         payload = NEW_CTF.format(event["title"], start, event["ctftime_url"])
-
 
     if len(payload) > 140:
         payload = NEW_CTF.format(event["ctftime_url"], start, "")
