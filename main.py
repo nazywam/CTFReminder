@@ -75,6 +75,11 @@ def writeTo(q, file):
     f.write(str(q))
     f.close()
 
+def appendTo(q, file):
+    tab = readFrom(file)
+    tab.append(q)
+    writeTo(tab, file)
+
 
 def tweet(data):
     api = initAPI()
@@ -191,17 +196,8 @@ for f in justFetched[::-1]:
             #brand new tweet
             if not ctfInList(f, second) and not ctfInList(f, first):
                 tweetNew(f)
-                first.append(f)
-                updates += 1
+                appendTo(f, "first")
 
             if ctfInList(f, first) and not ctfInList(f, second) and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
                 tweetRemind(f)
-                second.append(f)
-                updates += 1
-
-writeTo(first, "first")
-writeTo(second, "second")
-
-l = open(os.path.dirname(os.path.realpath(__file__))+"/log", "a")
-l.write(str(currentTime)+" "+str(updates)+"\n")
-l.close()
+                appendTo(f, "second")
