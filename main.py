@@ -95,7 +95,12 @@ def tweetWithImage(data, imageUrl):
                 image.write(chunk)
 
         api = initAPI()
-        api.update_with_media(filename, status=data)
+
+        try:
+            api.update_with_media(filename, status=data)
+        except tweepy.TweepError:
+            tweet(data)
+
         os.remove(filename)
 
     #coulnd't get the image, tough luck
@@ -192,7 +197,7 @@ for f in justFetched[::-1]:
     #no need to think about ctfs for time travelers...
     if startTimeEpoch > currentTime:
         #we don't really care for onsite events
-        if not f["onsite"]:
+        if not f["onsite"] and f["restrictions"] == "":
             #brand new tweet
             if not ctfInList(f, second) and not ctfInList(f, first):
                 tweetNew(f)
