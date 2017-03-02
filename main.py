@@ -197,7 +197,7 @@ for f in justFetched[::-1]:
     #no need to think about ctfs for time travelers...
     if startTimeEpoch > currentTime:
         #we don't really care for onsite events
-        if not f["onsite"] and f["restrictions"] == "":
+        if not f["onsite"] and f["restrictions"] == "Open":
             #brand new tweet
             if not ctfInList(f, second) and not ctfInList(f, first):
                 tweetNew(f)
