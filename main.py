@@ -13,7 +13,7 @@ import dateutil.parser
 import pytz
 import tweepy # type: ignore
 from requests import get
-from templates import *
+from templates import NEW_CTF, NEW_CTF_TWITTER, REMIND_CTF, REMIND_CTF_TWITTER
 
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
@@ -139,12 +139,12 @@ def tweet_new_ctf(event: Dict[str, Any]) -> None:
     org_handle = scrape_organiser_twitter(event["organizers"][0]["id"])
 
     if org_handle:
-        payload = NEW_CTF_TWITTER.format(title, org_handle, start, ctftime_url)
+        payload = NEW_CTF_TWITTER.format(title=title, organiser=org_handle, start=start, url=ctftime_url)
     else:
-        payload = NEW_CTF.format(title, start, ctftime_url)
+        payload = NEW_CTF.format(title=title, start=start, url=ctftime_url)
 
     if len(payload) > 140:
-        payload = NEW_CTF.format(ctftime_url, start, "")
+        payload = NEW_CTF.format(title=ctftime_url, start=start, url="")
 
     if logo_url:
         tweet_text_image(status=payload, image_url=logo_url)
@@ -161,12 +161,12 @@ def tweet_ctf_reminder(event: Dict[str, Any]) -> None:
     log.info("Tweeting a reminder about a ctf: %s", title)
 
     if org_handle:
-        payload = REMIND_CTF_TWITTER.format(title, org_handle, ctftime_url)
+        payload = REMIND_CTF_TWITTER.format(title=title, organiser=org_handle, url=ctftime_url)
     else:
-        payload = REMIND_CTF.format(title, ctftime_url)
+        payload = REMIND_CTF.format(title=title, url=ctftime_url)
 
     if len(payload) > 140:
-        payload = REMIND_CTF.format(ctftime_url, ":)")
+        payload = REMIND_CTF.format(title=ctftime_url, url="")
 
     if logo_url:
         tweet_text_image(payload, logo_url)
@@ -193,7 +193,7 @@ def save_database(once: List[Dict[str, Any]], twice: List[Dict[str, Any]]) -> No
         }))
 
 
-def pool_ctfs() -> None:
+def poll_ctfs() -> None:
     current_time = pytz.UTC.localize(datetime.now())
 
     log.info("Reading previously tweeted ctfs from database")
@@ -207,7 +207,7 @@ def pool_ctfs() -> None:
 
     for f in ctfs[::-1]:
         start_time = dateutil.parser.parse(f["start"])
-        # do not report past ftfs
+        # do not report past ctfs
         if start_time > current_time:
             if not f["onsite"] and f["restrictions"] == "Open":
                 
@@ -225,4 +225,4 @@ def pool_ctfs() -> None:
 
 
 if __name__ == '__main__':
-    pool_ctfs()
+    poll_ctfs()
