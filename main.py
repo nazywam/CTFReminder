@@ -1,17 +1,19 @@
 #!/usr/bin/python3
-from time import time
-from requests import get
-import tweepy
-import dateutil.parser
-import os
-from typing import List, Dict, Any, Optional, Tuple
-import logging
-import config
-import re
-from templates import *
-from datetime import datetime, timedelta
-import pytz
 import json
+import logging
+import os
+import re
+import tempfile
+from datetime import datetime, timedelta
+from time import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import config
+import dateutil.parser
+import pytz
+import tweepy # type: ignore
+from requests import get
+from templates import *
 
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
@@ -40,7 +42,7 @@ def fetch_ctfs(time_start: int, time_end: int) -> Optional[List[Dict[str, Any]]]
 
     r = get(url=CTFTIME_EVENTS_URL, params=params, headers=HEADERS)
     if r.status_code != 200:
-        self.error("Ctftime responded with %d :(", r.status_code)
+        log.error("Ctftime responded with %d :(", r.status_code)
         return None
 
     return r.json()
@@ -73,13 +75,13 @@ def tweet_text(status: str) -> None:
 
 
 def fetch_image(url: str, save_path: str) -> bool:
-    r = get(image_url, stream=True)
+    r = get(url, stream=True)
     if r.status_code != 200:
         log.error("Couldn't get the image from %s, returned %d", url, r.status_code)
         return False
     
     with open(save_path, 'wb') as f:
-        for chunk in request:
+        for chunk in r:
             f.write(chunk)
     return True
 
@@ -88,11 +90,11 @@ def tweet_text_image(status: str, image_url: str) -> None:
     if config.PRODUCTION:
         twitter = get_twitter()
 
-        with tempfile.TemporaryFile() as image_path:
-            if fetch_image(image_url, image_path):
-                api.update_with_media(image_path, status=data)
+        with tempfile.NamedTemporaryFile() as image_path:
+            if fetch_image(image_url, image_path.name):
+                twitter.update_with_media(image_path.name, status=status)
             else:
-                api.update_status(status=status)
+                twitter.update_status(status=status)
     else:
         print("TWEET WITH IMAGE:")
         print(status)
@@ -159,14 +161,14 @@ def tweet_ctf_reminder(event: Dict[str, Any]) -> None:
     log.info("Tweeting a reminder about a ctf: %s", title)
 
     if org_handle:
-        payload = REMIND_CTF_TWITTER.format(title, orgTwitter, ctftime_url)
+        payload = REMIND_CTF_TWITTER.format(title, org_handle, ctftime_url)
     else:
         payload = REMIND_CTF.format(title, ctftime_url)
 
     if len(payload) > 140:
         payload = REMIND_CTF.format(ctftime_url, ":)")
 
-    if logo_url
+    if logo_url:
         tweet_text_image(payload, logo_url)
     else:
         tweet_text(payload)
@@ -198,6 +200,10 @@ def pool_ctfs() -> None:
     first, second = read_database()
     log.info("Getting new ctfs")
     ctfs = fetch_all_ctfs()
+
+    if not ctfs:
+        log.error("Failed to get any ctfs")
+        return
 
     for f in ctfs[::-1]:
         start_time = dateutil.parser.parse(f["start"])
