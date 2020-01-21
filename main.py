@@ -1,208 +1,228 @@
-#!/usr/bin/python
-
-from time import time
-from requests import get
-import tweepy
-import dateutil.parser
+#!/usr/bin/python3
+import json
+import logging
 import os
-from bs4 import BeautifulSoup
+import re
+import tempfile
+from datetime import datetime, timedelta
+from time import time
+from typing import Any, Dict, List, Optional, Tuple
 
-CTFTIME_API_URL = "https://ctftime.org/api/v1/events/"
+import config
+import dateutil.parser
+import pytz
+import tweepy # type: ignore
+from requests import get
+from templates import NEW_CTF, NEW_CTF_TWITTER, REMIND_CTF, REMIND_CTF_TWITTER
 
-#interval at which this script is called
+log = logging.getLogger(__file__)
+log.setLevel(logging.DEBUG)
+
+file_handler = logging.FileHandler('ctfreminder.log')
+file_handler.setLevel(logging.DEBUG)
+log.addHandler(file_handler)
+
+CTFTIME_EVENTS_URL = "https://ctftime.org/api/v1/events/"
+
+HEADERS = {
+    "User-Agent": config.USER_AGENT
+}
 UPDATE_TIME = 5 * 60 #5 minutes
 DAY_TIMESTAMP = 60 * 60 * 24 #24 hours
+YEAR_SECONDS = 31536000
 
 
-NEW_CTF = """New CTF!
-{}, starts at {}
-{}
-"""
-
-NEW_CTF_TWITTER = """New CTF!
-{} organized by {}, starts at {}
-{}
-"""
-
-REMIND_CTF = """{} starts in under 24 hours!
-{}
-"""
-
-REMIND_CTF_TWITTER = """{} organized by {} starts in under 24 hours!
-{}
-"""
-
-def fetchCtfs(timeStart, timeEnd):
-    dataParameters = {
-        "limit":"1000",
-        "start":str(timeStart),
-        "finish":str(timeEnd),
+def fetch_ctfs(time_start: int, time_end: int) -> Optional[List[Dict[str, Any]]]:
+    log.debug("Querying for a list of ctfs from %d to %d", time_end, time_end)
+    params = {
+        "limit": 1000,
+        "start": time_start,
+        "finish": time_end,
     }
 
-    r = get(url=CTFTIME_API_URL, params=dataParameters)
+    r = get(url=CTFTIME_EVENTS_URL, params=params, headers=HEADERS)
+    if r.status_code != 200:
+        log.error("Ctftime responded with %d :(", r.status_code)
+        return None
 
-    #u wot m8
-    payload = r.text.replace("false", "False").replace("true", "True")
-
-    return eval(payload)
+    return r.json()
 
 
-def fetchAll():
-    currentTime = int(time())  #strip the milliseconds
-    return (fetchCtfs(currentTime, currentTime + 1000000000))
+def fetch_all_ctfs() -> Optional[List[Dict[str, Any]]]:
+    now = int(time())
+    return fetch_ctfs(now, now + YEAR_SECONDS)
 
-def initAPI():
-    config = open(os.path.dirname(os.path.realpath(__file__))+"/config", "r").read().split("\n")
 
-    consumer_key = config[0]
-    consumer_secret = config[1]
-    access_token = config[2]
-    access_token_secret = config[3]
+def get_twitter() -> tweepy.API:
+    consumer_key = config.TWITTER_CONSUMER_KEY
+    consumer_secret = config.TWITTER_CONSUMER_SECRET
+    access_token = config.TWITTER_ACCESS_TOKEN
+    access_token_secret = config.TWITTER_ACCESS_TOKEN_SECRET
 
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(access_token, access_token_secret)
-
     return tweepy.API(auth)
 
-def readFrom(file):
-    f = open(os.path.dirname(os.path.realpath(__file__))+"/"+file, "rb")
-    r = f.read()
-    f.close()
-    return eval(r)
 
-def writeTo(q, file):
-    f = open(os.path.dirname(os.path.realpath(__file__))+"/"+file, "wb")
-    f.write(str(q))
-    f.close()
-
-def appendTo(q, file):
-    tab = readFrom(file)
-    tab.append(q)
-    writeTo(tab, file)
-
-
-def tweet(data):
-    api = initAPI()
-    api.update_status(status=data)
-
-def tweetWithImage(data, imageUrl):
-    filename = 'temp.png'
-
-    request = get(imageUrl, stream=True)
-    if request.status_code == 200:
-        with open(filename, 'wb') as image:
-            for chunk in request:
-                image.write(chunk)
-
-        api = initAPI()
-
-        try:
-            api.update_with_media(filename, status=data)
-        except tweepy.TweepError:
-            tweet(data)
-
-        os.remove(filename)
-
-    #coulnd't get the image, tough luck
+def tweet_text(status: str) -> None:
+    if config.PRODUCTION:
+        api = get_twitter()
+        api.update_status(status=status)
     else:
-        tweet(data)
+        print("TWEET:")
+        print(status)
+        print("")
 
 
-def getOrganizerTwitterHandle(organizer):
-    data = get("https://ctftime.org/team/" + str(organizer)).text
-
-    soup = BeautifulSoup(data, "lxml")
-
-    ret = ""
-
-    for i in soup.find_all("div", {"class":"span10"}):
-
-        for c in i.children:
-            for q in str(c).split("\n"):
-                if "Twitter:" in q:
-                    if "http" in q:
-                        s = BeautifulSoup(q, "lxml")
-                        url = s.find_all("a")[0].get("href")
-                        ret = "@" + url.split("/")[-1]
-                    elif "@" in q:
-                        ret = q[12:-4]
-                    else:
-                        ret = "@" + q[12:-4]
-
-    return ret
+def fetch_image(url: str, save_path: str) -> bool:
+    r = get(url, stream=True)
+    if r.status_code != 200:
+        log.error("Couldn't get the image from %s, returned %d", url, r.status_code)
+        return False
+    
+    with open(save_path, 'wb') as f:
+        for chunk in r:
+            f.write(chunk)
+    return True
 
 
-def tweetNew(event):
-    print("Tweet new")
+def tweet_text_image(status: str, image_url: str) -> None:
+    if config.PRODUCTION:
+        twitter = get_twitter()
 
-    start = event["start"].replace("T", " ")[:-6]+" UTC"
-
-    orgTwitter = getOrganizerTwitterHandle(event["organizers"][0]["id"])
-
-    if orgTwitter != "":
-        payload = NEW_CTF_TWITTER.format(event["title"], orgTwitter, start, event["ctftime_url"])
+        with tempfile.NamedTemporaryFile() as image_path:
+            if fetch_image(image_url, image_path.name):
+                twitter.update_with_media(image_path.name, status=status)
+            else:
+                twitter.update_status(status=status)
     else:
-        payload = NEW_CTF.format(event["title"], start, event["ctftime_url"])
+        print("TWEET WITH IMAGE:")
+        print(status)
+        print(image_url)
+        print("")
 
-    if len(payload) > 140:
-        payload = NEW_CTF.format(event["ctftime_url"], start, "")
 
-    if(event["logo"] != ""):
-        tweetWithImage(payload, event["logo"])
+# unfortunatelly not exposed via api :< 
+def scrape_organiser_twitter(organiser_id: int) -> Optional[str]:
+    log.debug("Fetching twitter handle for team %d", organiser_id)
+    
+    organiser_page = get(url=f"https://ctftime.org/team/{organiser_id}", headers=HEADERS).text
+
+    twitter_core_r = '<p>Twitter: (.*?)</p>'
+    twitter_url_r = 'twitter\\.com/(.*?)\\"'
+
+    twitter_row = re.findall(twitter_core_r, organiser_page)
+    if not twitter_row:
+        log.warning("Failed to get the twitter row")
+        return None
+    
+    row = twitter_row[0]
+    log.info("Got the twitter row: %s", repr(row))
+
+    twitter_url = re.findall(twitter_url_r, row)
+    if twitter_url:
+        return f"@{twitter_url[0]}"
+    elif row.startswith('@'):
+        return row
     else:
-        tweet(payload)
+        return f"@{row}"
 
 
-def tweetRemind(event):
-    print("Tweet remind")
+def tweet_new_ctf(event: Dict[str, Any]) -> None:
+    title = event["title"]
+    ctftime_url = event["ctftime_url"]
+    logo_url = event["logo"]
+    log.info("Tweeting about a new ctf: %s", title)
 
-    orgTwitter = getOrganizerTwitterHandle(event["organizers"][0]["id"])
+    event_start = dateutil.parser.parse(event["start"])
+    start = event_start.strftime("%Y-%m-%d %H:%M:%S UTC")
+    org_handle = scrape_organiser_twitter(event["organizers"][0]["id"])
 
-    if(orgTwitter != ""):
-        payload = REMIND_CTF_TWITTER.format(event["title"], orgTwitter, event["ctftime_url"])
+    if org_handle:
+        payload = NEW_CTF_TWITTER.format(title=title, organiser=org_handle, start=start, url=ctftime_url)
     else:
-        payload = REMIND_CTF.format(event["title"], event["ctftime_url"])
+        payload = NEW_CTF.format(title=title, start=start, url=ctftime_url)
 
-    if len(payload) > 140:
-        payload = REMIND_CTF.format(event["ctftime_url"], ":)")
+    if len(payload) > 280:
+        payload = NEW_CTF.format(title=ctftime_url, start=start, url="")
 
-    if(event["logo"] != ""):
-        tweetWithImage(payload, event["logo"])
+    if logo_url:
+        tweet_text_image(status=payload, image_url=logo_url)
     else:
-        tweet(payload)
+        tweet_text(status=payload)
 
-def ctfInList(ctf, list):
-    for i in list:
-        if i["ctf_id"] == ctf["ctf_id"]:
-            return True
-    return False
 
-#get current time in unix epoch
-currentTime = int(time())
+def tweet_ctf_reminder(event: Dict[str, Any]) -> None:
+    title = event["title"]
+    ctftime_url = event["ctftime_url"]
+    logo_url = event["logo"]
+    org_handle = scrape_organiser_twitter(event["organizers"][0]["id"])
 
-#tweeted once
-first = readFrom("first")
-#tweeted twice
-second = readFrom("second")
+    log.info("Tweeting a reminder about a ctf: %s", title)
 
-justFetched = fetchAll()
+    if org_handle:
+        payload = REMIND_CTF_TWITTER.format(title=title, organiser=org_handle, url=ctftime_url)
+    else:
+        payload = REMIND_CTF.format(title=title, url=ctftime_url)
 
-updates = 0
+    if len(payload) > 280:
+        payload = REMIND_CTF.format(title=ctftime_url, url="")
 
-for f in justFetched[::-1]:
+    if logo_url:
+        tweet_text_image(payload, logo_url)
+    else:
+        tweet_text(payload)
 
-    startTime = dateutil.parser.parse(f["start"])
 
-    startTimeEpoch = int(startTime.strftime("%s"))
-    #no need to think about ctfs for time travelers...
-    if startTimeEpoch > currentTime:
-        #we don't really care for onsite events
-        if not f["onsite"] and f["restrictions"] == "Open":
-            #brand new tweet
-            if not ctfInList(f, second) and not ctfInList(f, first):
-                tweetNew(f)
-                appendTo(f, "first")
+def read_database() -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    if not os.path.exists(config.DB_PATH):
+        return ([], [])
+    else:
+        with open(config.DB_PATH, 'r') as f:
+            data = json.loads(f.read())
+            return (
+                data["mentioned_once"],
+                data["mentioned_twice"]
+            )
 
-            if ctfInList(f, first) and not ctfInList(f, second) and (startTimeEpoch-currentTime)<DAY_TIMESTAMP:
-                tweetRemind(f)
-                appendTo(f, "second")
+def save_database(once: List[Dict[str, Any]], twice: List[Dict[str, Any]]) -> None:
+    with open(config.DB_PATH, 'w') as f:
+        f.write(json.dumps({
+            "mentioned_once": once,
+            "mentioned_twice": twice,
+        }))
+
+
+def poll_ctfs() -> None:
+    current_time = pytz.UTC.localize(datetime.now())
+
+    log.info("Reading previously tweeted ctfs from database")
+    first, second = read_database()
+    log.info("Getting new ctfs")
+    ctfs = fetch_all_ctfs()
+
+    if not ctfs:
+        log.error("Failed to get any ctfs")
+        return
+
+    for f in ctfs[::-1]:
+        start_time = dateutil.parser.parse(f["start"])
+        # do not report past ctfs
+        if start_time > current_time:
+            if not f["onsite"] and f["restrictions"] == "Open":
+                
+                ctf_id = f["ctf_id"]
+
+                if not ctf_id in second and not ctf_id in first:
+                    tweet_new_ctf(f)
+                    first.append(ctf_id)
+                    save_database(first, second)
+
+                if ctf_id in first and not ctf_id in second and current_time + timedelta(hours=24) > start_time:
+                    tweet_ctf_reminder(f)
+                    second.append(ctf_id)
+                    save_database(first, second)
+
+
+if __name__ == '__main__':
+    poll_ctfs()
