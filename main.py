@@ -75,7 +75,7 @@ def tweet_text(status: str) -> None:
 
 
 def fetch_image(url: str, save_path: str) -> bool:
-    r = get(url, stream=True)
+    r = get(url, stream=True, headers=HEADERS)
     if r.status_code != 200:
         log.error("Couldn't get the image from %s, returned %d", url, r.status_code)
         return False
