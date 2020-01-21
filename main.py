@@ -143,7 +143,7 @@ def tweet_new_ctf(event: Dict[str, Any]) -> None:
     else:
         payload = NEW_CTF.format(title=title, start=start, url=ctftime_url)
 
-    if len(payload) > 140:
+    if len(payload) > 280:
         payload = NEW_CTF.format(title=ctftime_url, start=start, url="")
 
     if logo_url:
@@ -165,7 +165,7 @@ def tweet_ctf_reminder(event: Dict[str, Any]) -> None:
     else:
         payload = REMIND_CTF.format(title=title, url=ctftime_url)
 
-    if len(payload) > 140:
+    if len(payload) > 280:
         payload = REMIND_CTF.format(title=ctftime_url, url="")
 
     if logo_url:
